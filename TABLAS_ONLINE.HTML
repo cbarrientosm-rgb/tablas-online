@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tablas Online 🏆</title>
+  <style>
+    body{font-family:system-ui,Arial; margin:0; padding:18px; background:#fff3e0}
+    .box{max-width:900px; margin:auto; background:white; padding:16px; border-radius:16px; box-shadow:0 10px 25px rgba(0,0,0,.12)}
+    h1{margin:0 0 10px}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    input,select,button{padding:10px 12px; border-radius:12px; border:2px solid #eee; font-size:14px}
+    button{cursor:pointer; font-weight:900}
+    .q{font-size:34px; font-weight:1000; margin:12px 0}
+    .answers{display:grid; grid-template-columns:repeat(2,1fr); gap:10px}
+    .ans{padding:14px; font-size:18px; font-weight:1000; background:#fafafa}
+    .ok{background:#d1fae5}
+    .bad{background:#ffe4e6}
+    table{width:100%; border-collapse:collapse; margin-top:12px}
+    th,td{padding:8px; border-bottom:1px solid #eee; text-align:left}
+    .right{text-align:right}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Tablas Online 🏆</h1>
+
+    <div class="row">
+      <input id="nombre" placeholder="Nombre del estudiante" />
+      <select id="tabla">
+        <option value="mix">Mezcla (2–10)</option>
+        <option value="2">Tabla del 2</option><option value="3">Tabla del 3</option>
+        <option value="4">Tabla del 4</option><option value="5">Tabla del 5</option>
+        <option value="6">Tabla del 6</option><option value="7">Tabla del 7</option>
+        <option value="8">Tabla del 8</option><option value="9">Tabla del 9</option>
+        <option value="10">Tabla del 10</option>
+      </select>
+      <button id="start">▶️ Jugar</button>
+      <button id="ver">🔄 Actualizar ranking</button>
+    </div>
+
+    <div id="estado" style="margin-top:10px; font-weight:800;">Ingresa tu nombre y juega.</div>
+
+    <div class="q" id="q">—</div>
+    <div class="answers" id="answers"></div>
+
+    <div style="margin-top:10px;">
+      <b>Puntos:</b> <span id="pts">0</span> |
+      ✅ <span id="ok">0</span> |
+      ❌ <span id="bad">0</span> |
+      Pregunta <span id="i">0</span>/10
+    </div>
+
+    <h3 style="margin-top:16px;">Ranking (Top 20)</h3>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Nombre</th><th class="right">Puntos</th><th class="right">✅</th><th class="right">❌</th></tr>
+      </thead>
+      <tbody id="rank"></tbody>
+    </table>
+  </div>
+
+<script>
+  // 🔴 PEGA AQUÍ la URL de tu Web App (Apps Script)
+  const API_URL = "https://script.google.com/macros/s/AKfycbw6A7YeIwruBjHEe5b0Eq-xtJi97IGcqteIFn6-NHkXiXpyvKx6nTHJLnwqZHAzhCAJ/exec";
+
+  const $ = (id)=>document.getElementById(id);
+
+  const game = {
+    playing:false,
+    total:10,
+    n:0,
+    a:0,b:0,
+    pts:0, ok:0, bad:0,
+    locked:false
+  };
+
+  function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+  function pick(){
+    const mode = $("tabla").value;
+    let a,b;
+    if(mode==="mix"){ a = randInt(2,10); b = randInt(0,12); }
+    else { a = Number(mode); b = randInt(0,12); }
+    game.a=a; game.b=b;
+    $("q").textContent = `${a} × ${b} = ?`;
+    buildAnswers(a*b);
+  }
+
+  function buildAnswers(correct){
+    const set = new Set([correct]);
+    while(set.size<4){
+      set.add(Math.max(0, correct + randInt(-6,6)));
+    }
+    const opts = Array.from(set).sort(()=>Math.random()-0.5);
+    const wrap = $("answers");
+    wrap.innerHTML="";
+    opts.forEach(v=>{
+      const btn=document.createElement("button");
+      btn.className="ans";
+      btn.textContent=v;
+      btn.onclick=()=>choose(v,btn,correct);
+      wrap.appendChild(btn);
+    });
+  }
+
+  function render(){
+    $("pts").textContent=game.pts;
+    $("ok").textContent=game.ok;
+    $("bad").textContent=game.bad;
+    $("i").textContent=game.n;
+  }
+
+  function start(){
+    const nombre = $("nombre").value.trim();
+    if(!nombre){ $("estado").textContent="⚠️ Escribe tu nombre primero."; return; }
+
+    game.playing=true;
+    game.n=0; game.pts=0; game.ok=0; game.bad=0;
+    $("estado").textContent="¡Juega! Al final se sube tu puntaje al ranking.";
+    next();
+  }
+
+  function next(){
+    if(!game.playing) return;
+    game.locked=false;
+    game.n++;
+    render();
+
+    if(game.n>game.total){
+      end();
+      return;
+    }
+    pick();
+  }
+
+  function choose(val, btn, correct){
+    if(!game.playing || game.locked) return;
+    game.locked=true;
+
+    const all=[...document.querySelectorAll(".ans")];
+    if(val===correct){
+      btn.classList.add("ok");
+      game.ok++; game.pts++;
+      $("estado").textContent="✅ ¡Bien!";
+    }else{
+      btn.classList.add("bad");
+      game.bad++;
+      const right = all.find(b=>Number(b.textContent)===correct);
+      if(right) right.classList.add("ok");
+      $("estado").textContent=`❌ Era ${correct}.`;
+    }
+    render();
+    setTimeout(next, 600);
+  }
+
+  async function end(){
+    game.playing=false;
+    $("q").textContent="🏁 ¡Terminaste!";
+    $("answers").innerHTML="";
+    $("estado").textContent="Subiendo puntaje al ranking…";
+
+    const payload = {
+      nombre: $("nombre").value.trim(),
+      puntos: game.pts,
+      correctas: game.ok,
+      incorrectas: game.bad
+    };
+
+    try{
+      await fetch(API_URL, {
+        method:"POST",
+        headers:{ "Content-Type":"text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      $("estado").textContent="✅ Puntaje enviado. Revisa el ranking.";
+      await loadRanking();
+    }catch(e){
+      $("estado").textContent="⚠️ No se pudo enviar. Revisa WiFi o la URL del servidor.";
+    }
+  }
+
+  async function loadRanking(){
+    try{
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      const r = (data.ranking || []).slice(0,20);
+      const tbody = $("rank");
+      tbody.innerHTML="";
+      r.forEach((p,i)=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML = `<td>${i+1}</td><td>${p.nombre}</td><td class="right"><b>${p.puntos}</b></td><td class="right">${p.correctas}</td><td class="right">${p.incorrectas}</td>`;
+        tbody.appendChild(tr);
+      });
+    }catch(e){}
+  }
+
+  $("start").onclick = start;
+  $("ver").onclick = loadRanking;
+
+  // Auto-actualiza ranking cada 10s
+  setInterval(loadRanking, 10000);
+  loadRanking();
+</script>
+</body>
+</html>
